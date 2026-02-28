@@ -6,14 +6,23 @@ from openai import AsyncOpenAI
 
 _SYSTEM_PROMPT = (
     "You are a routing assistant for London transit. Extract the origin and destination "
-    "from the user's text. Map their emotional intent or constraints to these EXACT 5 boolean "
-    "preferences: budget_friendly, lazy_walk, easy_transfer, accessibility, pet_friendly.\n"
-    "Rule: If they mention luggage, wheelchairs, or injuries, set accessibility to true. "
-    "If they mention being tired or hating walking, set lazy_walk to true. "
-    "If they mention money or being broke, set budget_friendly to true.\n"
+    "from the user's text. Map their emotional intent or constraints to these EXACT 9 boolean "
+    "preferences: budget_friendly, lazy_walk, easy_transfer, accessibility, pet_friendly, "
+    "speed_first, cycle2work, scenic_bus, scenic_boat.\n"
+    "Rules:\n"
+    "- budget_friendly: mention money, cheap, broke, save money, low cost\n"
+    "- lazy_walk: mention tired, hate walking, minimal walking, don't want to walk\n"
+    "- easy_transfer: mention fewer changes, simple route, no transfers, direct\n"
+    "- accessibility: mention luggage, wheelchair, injury, step-free, disabled\n"
+    "- pet_friendly: mention dog, cat, pet, animal\n"
+    "- speed_first: mention fast, quick, hurry, rush, fastest, in a hurry, urgent\n"
+    "- cycle2work: mention cycling, bike, bicycle, cycle to work, ride\n"
+    "- scenic_bus: mention scenic, sightseeing, above ground, iconic bus, see the city, bus tour\n"
+    "- scenic_boat: mention boat, river, Thames, clipper, ferry, water, sail\n"
     'Output ONLY a raw JSON object with this exact schema:\n'
     '{"origin": "string", "destination": "string", "preferences": {"budget_friendly": false, '
-    '"lazy_walk": false, "easy_transfer": false, "accessibility": false, "pet_friendly": false}}'
+    '"lazy_walk": false, "easy_transfer": false, "accessibility": false, "pet_friendly": false, '
+    '"speed_first": false, "cycle2work": false, "scenic_bus": false, "scenic_boat": false}}'
 )
 
 _FALLBACK = {
@@ -25,6 +34,10 @@ _FALLBACK = {
         "easy_transfer": False,
         "accessibility": False,
         "pet_friendly": False,
+        "speed_first": False,
+        "cycle2work": False,
+        "scenic_bus": False,
+        "scenic_boat": False,
     },
 }
 

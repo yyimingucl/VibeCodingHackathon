@@ -1,9 +1,15 @@
+export type TravelMode = "commute" | "explore";
+
 export interface Preferences {
   budget_friendly: boolean;
   lazy_walk: boolean;
   easy_transfer: boolean;
   accessibility: boolean;
   pet_friendly: boolean;
+  speed_first: boolean;
+  cycle2work: boolean;
+  scenic_bus: boolean;
+  scenic_boat: boolean;
 }
 
 export interface RouteRequest {

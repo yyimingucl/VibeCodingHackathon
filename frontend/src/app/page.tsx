@@ -2,13 +2,16 @@
 
 import { useState, useRef } from "react";
 import { MapPin, Navigation, Loader2, Search, Mic, Square } from "lucide-react";
-import { Preferences, RouteOption } from "@/types";
+import { Preferences, RouteOption, TravelMode } from "@/types";
 import { fetchRankedRoutes, fetchVoiceSearch } from "@/lib/api";
 import PreferenceToggles from "@/components/PreferenceToggles";
 import RouteCard from "@/components/RouteCard";
 import TravelPass from "@/components/TravelPass";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import VideoBackground from "@/components/VideoBackground";
+import CycleRouteMap from "@/components/CycleRouteMap";
+import BoatRouteMap from "@/components/BoatRouteMap";
+import WeatherWidget from "@/components/WeatherWidget";
 
 const DEFAULT_PREFERENCES: Preferences = {
   budget_friendly: false,
@@ -16,6 +19,10 @@ const DEFAULT_PREFERENCES: Preferences = {
   easy_transfer: false,
   accessibility: false,
   pet_friendly: false,
+  speed_first: false,
+  cycle2work: false,
+  scenic_bus: false,
+  scenic_boat: false,
 };
 
 export default function Home() {
@@ -27,6 +34,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [passRoute, setPassRoute] = useState<RouteOption | null>(null);
+  const [mode, setMode] = useState<TravelMode>("commute");
   const [voiceState, setVoiceState] = useState<"idle" | "recording" | "processing">("idle");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
@@ -151,6 +159,21 @@ export default function Home() {
           />
         </div>
 
+        {/* Mode switcher */}
+        <div className="flex rounded-2xl bg-white/10 border border-white/20 p-1 mb-4">
+          {(["commute", "explore"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setPreferences(DEFAULT_PREFERENCES); }}
+              className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                mode === m ? "bg-white text-slate-800 shadow" : "text-white/70 hover:text-white"
+              }`}
+            >
+              {m === "commute" ? "🚇 Commute" : "🗺️ Explore"}
+            </button>
+          ))}
+        </div>
+
         {/* Mic button */}
         <button
           onClick={handleVoiceInput}
@@ -177,7 +200,7 @@ export default function Home() {
           <p className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-2 px-1">
             Your preferences
           </p>
-          <PreferenceToggles preferences={preferences} onChange={togglePreference} />
+          <PreferenceToggles preferences={preferences} onChange={togglePreference} mode={mode} />
         </div>
 
         {/* Search Button */}
@@ -211,22 +234,32 @@ export default function Home() {
           <p className="text-center text-sm text-white/50">No routes found. Try different locations.</p>
         )}
 
-        {routes.length > 0 && (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-white/60 uppercase tracking-wider px-1">
-              Top {routes.length} route{routes.length !== 1 ? "s" : ""}
-            </p>
-            {routes.map((route, index) => (
-              <RouteCard
-                key={route.id}
-                route={route}
-                isTopChoice={index === 0}
-                rank={index + 1}
-                onGetPass={() => setPassRoute(route)}
-              />
-            ))}
-          </div>
-        )}
+        {routes.length > 0 && (() => {
+          const hasCycle = routes.some((r) => r.steps.some((s) => s.mode === "CYCLE"));
+          const hasBoat = routes.some((r) => r.steps.some((s) => s.mode === "FERRY"));
+          const displayRoutes = preferences.cycle2work
+            ? routes.filter((r) => r.steps.some((s) => s.mode === "CYCLE"))
+            : routes;
+          return (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-white/60 uppercase tracking-wider px-1">
+                {preferences.cycle2work ? "Cycling route" : `Top ${displayRoutes.length} route${displayRoutes.length !== 1 ? "s" : ""}`}
+              </p>
+              {hasCycle && <WeatherWidget />}
+              {hasCycle && <CycleRouteMap origin={origin} destination={destination} />}
+              {hasBoat && <BoatRouteMap origin={origin} destination={destination} />}
+              {displayRoutes.map((route, index) => (
+                <RouteCard
+                  key={route.id}
+                  route={route}
+                  isTopChoice={index === 0}
+                  rank={index + 1}
+                  onGetPass={() => setPassRoute(route)}
+                />
+              ))}
+            </div>
+          );
+        })()}
       </main>
       {passRoute && (
         <TravelPass
@@ -234,6 +267,7 @@ export default function Home() {
           origin={origin}
           destination={destination}
           onClose={() => setPassRoute(null)}
+          mode={mode}
         />
       )}
     </>

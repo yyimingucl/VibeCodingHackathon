@@ -58,6 +58,8 @@ def _vehicle_type_to_mode(vehicle_type: str) -> str:
         return "BUS"
     if vt == "TRAM":
         return "TRAM"
+    if vt in {"FERRY", "GONDOLA_LIFT"}:
+        return "FERRY"
     return "TRANSIT"
 
 
@@ -98,8 +100,47 @@ def _impute_fare(raw_steps: list[dict], duration_min: float) -> float:
     return 2.80
 
 
-def _build_mock_routes() -> list[RouteOption]:
-    return [
+async def _fetch_cycle_route(origin: str, destination: str, api_key: str) -> Optional[RouteOption]:
+    """Fetch a BICYCLE route from Google Routes API and return it as a single CYCLE step."""
+    payload = {
+        "origin": {"address": origin},
+        "destination": {"address": destination},
+        "travelMode": "BICYCLE",
+    }
+    headers = {
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "routes.duration",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(GOOGLE_ROUTES_URL, json=payload, headers=headers)
+            resp.raise_for_status()
+            routes_raw = resp.json().get("routes", [])
+        if not routes_raw:
+            return None
+        duration_min = round(_parse_duration_seconds(routes_raw[0].get("duration", "0s")), 1)
+        if duration_min <= 0:
+            return None
+        return RouteOption(
+            id=_make_id("cycle", origin, destination),
+            summary="Cycle",
+            duration_min=duration_min,
+            fare_gbp=0.0,
+            walk_min=0.0,
+            transfers=0,
+            steps=[RouteStep(mode="CYCLE", line="", from_stop=origin, to_stop=destination, duration_min=duration_min)],
+            features=RouteFeatures(duration_min=duration_min, fare_gbp=0.0, walk_min=0.0, transfers=0),
+            score=0.0,
+            why=None,
+        )
+    except Exception as e:
+        print(f"[google_api] cycle route fetch error: {e}")
+        return None
+
+
+def _build_mock_routes(cycle2work: bool = False, scenic_boat: bool = False) -> list[RouteOption]:
+    routes = [
         RouteOption(
             id=_make_id("fast-tube"),
             summary="Walk + Tube (Piccadilly) + Elizabeth Line + Walk",
@@ -150,6 +191,37 @@ def _build_mock_routes() -> list[RouteOption]:
             why=None,
         ),
     ]
+    if cycle2work:
+        routes.append(RouteOption(
+            id=_make_id("mock-cycle"),
+            summary="Cycle",
+            duration_min=35.0,
+            fare_gbp=0.0,
+            walk_min=0.0,
+            transfers=0,
+            steps=[RouteStep(mode="CYCLE", line="", from_stop="Origin", to_stop="Destination", duration_min=35.0)],
+            features=RouteFeatures(duration_min=35.0, fare_gbp=0.0, walk_min=0.0, transfers=0),
+            score=0.0,
+            why=None,
+        ))
+    if scenic_boat:
+        routes.append(RouteOption(
+            id=_make_id("mock-boat"),
+            summary="Walk + Boat (RB1) + Walk",
+            duration_min=45.0,
+            fare_gbp=7.50,
+            walk_min=8.0,
+            transfers=0,
+            steps=[
+                RouteStep(mode="WALK", line="", from_stop="Origin", to_stop="Embankment Pier", duration_min=4.0),
+                RouteStep(mode="FERRY", line="RB1", from_stop="Embankment Pier", to_stop="Greenwich Pier", duration_min=37.0),
+                RouteStep(mode="WALK", line="", from_stop="Greenwich Pier", to_stop="Destination", duration_min=4.0),
+            ],
+            features=RouteFeatures(duration_min=45.0, fare_gbp=7.50, walk_min=8.0, transfers=0),
+            score=0.0,
+            why=None,
+        ))
+    return routes
 
 
 def _parse_routes(data: dict) -> list[RouteOption]:
@@ -203,6 +275,9 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                 if mode != "WALK":
                     vehicle_type = transit_line.get("vehicle", {}).get("type", "")
                     mode = _vehicle_type_to_mode(vehicle_type)
+                    # Name-based override: National Express operates UK mainline rail
+                    if mode == "BUS" and "national express" in line_name.lower():
+                        mode = "RAIL"
 
                 if mode == "WALK":
                     from_stop = from_stop or "Walk start"
@@ -246,6 +321,8 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                     mode_parts.append(f"Rail ({s.line})" if s.line else "Rail")
                 elif s.mode == "TRAM":
                     mode_parts.append(f"Tram ({s.line})" if s.line else "Tram")
+                elif s.mode == "FERRY":
+                    mode_parts.append(f"Boat ({s.line})" if s.line else "Boat")
                 else:  # TUBE or TRANSIT fallback
                     mode_parts.append(f"Tube ({s.line})" if s.line else "Tube")
             summary = " + ".join(mode_parts) if mode_parts else "Transit"
@@ -281,11 +358,13 @@ def _parse_routes(data: dict) -> list[RouteOption]:
     return list(unique_routes.values())
 
 
-async def fetch_google_routes(origin: str, destination: str, depart_time: str) -> list[RouteOption]:
+async def fetch_google_routes(
+    origin: str, destination: str, depart_time: str, cycle2work: bool = False, scenic_boat: bool = False
+) -> list[RouteOption]:
     api_key = os.getenv("Maps_API_KEY", "")
 
     if not api_key:
-        return _build_mock_routes()
+        return _build_mock_routes(cycle2work=cycle2work, scenic_boat=scenic_boat)
 
     payload = {
         "origin": {"address": origin},
@@ -304,15 +383,32 @@ async def fetch_google_routes(origin: str, destination: str, depart_time: str) -
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(GOOGLE_ROUTES_URL, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        import asyncio
+        transit_task = asyncio.create_task(
+            _do_post(GOOGLE_ROUTES_URL, payload, headers)
+        )
+        cycle_task = asyncio.create_task(
+            _fetch_cycle_route(origin, destination, api_key)
+        ) if cycle2work else None
 
+        data = await transit_task
         routes = _parse_routes(data)
+
+        if cycle_task:
+            cycle_route = await cycle_task
+            if cycle_route:
+                routes.append(cycle_route)
+
         if not routes:
-            return _build_mock_routes()
+            return _build_mock_routes(cycle2work=cycle2work, scenic_boat=scenic_boat)
         return routes
 
     except Exception:
-        return _build_mock_routes()
+        return _build_mock_routes(cycle2work=cycle2work, scenic_boat=scenic_boat)
+
+
+async def _do_post(url: str, payload: dict, headers: dict) -> dict:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        return resp.json()

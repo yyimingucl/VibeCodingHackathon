@@ -86,6 +86,8 @@ async def get_ranked_routes(request: RouteRankRequest) -> list[RouteOption]:
             origin=request.origin,
             destination=request.destination,
             depart_time=request.depart_time_iso,
+            cycle2work=request.preferences.cycle2work,
+            scenic_boat=request.preferences.scenic_boat,
         )
         ranked = rank_routes(
             routes=routes,

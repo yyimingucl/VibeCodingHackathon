@@ -1,5 +1,7 @@
 from schemas import RouteOption
 
+_ICONIC_BUS_LINES = frozenset({"11", "15", "24", "9", "RV1"})
+
 
 def _normalize(values: list[float]) -> list[float]:
     """Min-max normalize; 0.0 = best, 1.0 = worst. Returns 0.0 for all if max==min."""
@@ -52,8 +54,15 @@ def rank_routes(
     if preferences.get("accessibility"):
         w_walk *= 5.0
         w_transfers *= 5.0
+    if preferences.get("speed_first"):
+        w_time *= 8.0
+    if preferences.get("cycle2work"):
+        w_walk = 0.0  # walking is rewarded below, not penalised
 
     pet = preferences.get("pet_friendly", False)
+    cycle2work = preferences.get("cycle2work", False)
+    scenic_bus = preferences.get("scenic_bus", False)
+    scenic_boat = preferences.get("scenic_boat", False)
 
     # --- 4. Score each route ---
     for i, r in enumerate(routes):
@@ -65,10 +74,37 @@ def rank_routes(
         )
         if pet and ("Tube" in r.summary or "Underground" in r.summary):
             score += 0.5
+        # cycle2work: reward walking AND give a big bonus for full cycling routes
+        if cycle2work:
+            score -= r.features.walk_min * 2
+            if any(step.mode == "CYCLE" for step in r.steps):
+                score -= r.features.duration_min * 1.5
+        # scenic_bus: step-level surface-transport logic
+        if scenic_bus:
+            for step in r.steps:
+                if step.mode in ("TUBE", "SUBWAY", "UNDERGROUND"):
+                    score += 1.5
+                elif step.mode == "BUS":
+                    score -= 0.5
+                    if step.line in _ICONIC_BUS_LINES:
+                        score -= 3.0
+        # scenic_boat: strongly reward FERRY routes, penalize underground
+        if scenic_boat:
+            for step in r.steps:
+                if step.mode == "FERRY":
+                    score -= 4.0
+                elif step.mode in ("TUBE", "SUBWAY", "UNDERGROUND"):
+                    score += 1.0
         r.score = round(score, 4)
 
     # --- 5. Sort ascending (lower = better) ---
     routes.sort(key=lambda r: r.score)
+
+    # scenic_boat: always surface FERRY routes to the top regardless of score
+    if scenic_boat:
+        ferry = [r for r in routes if any(s.mode == "FERRY" for s in r.steps)]
+        others = [r for r in routes if not any(s.mode == "FERRY" for s in r.steps)]
+        routes = ferry + others
 
     # --- 6. Generate why for top route ---
     if len(routes) >= 2:
@@ -106,6 +142,29 @@ def _generate_why(best: RouteOption, runner: RouteOption, preferences: dict) -> 
     if preferences.get("pet_friendly"):
         if "Tube" not in best.summary and "Underground" not in best.summary:
             return "Ranked #1 because it avoids deep underground routes, keeping your pet comfortable."
+
+    if preferences.get("speed_first"):
+        time_diff = round(runner.features.duration_min - best.features.duration_min, 1)
+        if time_diff > 0:
+            return f"Ranked #1: Gets you there {time_diff} mins faster — pure speed mode."
+
+    if preferences.get("cycle2work"):
+        if any(step.mode == "CYCLE" for step in best.steps):
+            return "Ranked #1: Cycling all the way! Zero fare, zero emissions, great exercise."
+        return "Ranked #1: Includes active segments to help you hit your daily step goal."
+
+    if preferences.get("scenic_bus"):
+        for step in best.steps:
+            if step.mode == "BUS" and step.line in _ICONIC_BUS_LINES:
+                return f"Ranked #1: Route {step.line} is one of London's iconic sightseeing buses — enjoy the view!"
+        return "Ranked #1: Keeps you above ground on iconic London bus routes so you can enjoy the view!"
+
+    if preferences.get("scenic_boat"):
+        for step in best.steps:
+            if step.mode == "FERRY":
+                line = f" ({step.line})" if step.line else ""
+                return f"Ranked #1: Sail the Thames{line} — a scenic river journey through the heart of London!"
+        return "Ranked #1: Best route for a relaxing Thames river experience!"
 
     # Default: fastest
     time_diff = round(runner.features.duration_min - best.features.duration_min, 1)

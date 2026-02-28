@@ -1,5 +1,5 @@
 import { RouteOption } from "@/types";
-import { Footprints, Train, Bus, ArrowRight } from "lucide-react";
+import { Footprints, Train, Bus, Bike, Ship, ArrowRight } from "lucide-react";
 
 interface Props {
   route: RouteOption;
@@ -11,8 +11,10 @@ interface Props {
 function StepIcon({ mode }: { mode: string }) {
   if (mode === "WALK") return <Footprints size={14} className="text-slate-400" />;
   if (mode === "BUS") return <Bus size={14} className="text-red-500" />;
+  if (mode === "CYCLE") return <Bike size={14} className="text-green-500" />;
   if (mode === "RAIL") return <Train size={14} className="text-indigo-500" />;
   if (mode === "TRAM") return <Train size={14} className="text-purple-500" />;
+  if (mode === "FERRY") return <Ship size={14} className="text-blue-400" />;
   return <Train size={14} className="text-cyan-500" />; // TUBE + TRANSIT fallback
 }
 
@@ -54,8 +56,10 @@ function StepTimeline({ steps }: { steps: RouteOption["steps"] }) {
 }
 
 export default function RouteCard({ route, isTopChoice, rank, onGetPass }: Props) {
+  const hasRail = route.steps.some((s) => s.mode === "RAIL");
+
   const fare = route.fare_gbp !== null
-    ? `£${route.fare_gbp.toFixed(2)}`
+    ? `£${route.fare_gbp.toFixed(2)}${hasRail ? " + Railway Fare" : ""}`
     : "Price Unavailable";
 
   const fareColor = route.fare_gbp !== null ? "text-slate-800" : "text-slate-400";

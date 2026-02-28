@@ -1,7 +1,7 @@
 "use client";
 
-import { Preferences } from "@/types";
-import { PoundSterling, Footprints, ArrowLeftRight, Accessibility, PawPrint } from "lucide-react";
+import { Preferences, TravelMode } from "@/types";
+import { PoundSterling, Footprints, ArrowLeftRight, Accessibility, PawPrint, Zap, Bike, Bus, Ship } from "lucide-react";
 
 interface ToggleConfig {
   key: keyof Preferences;
@@ -10,25 +10,40 @@ interface ToggleConfig {
   icon: React.ReactNode;
 }
 
-const TOGGLES: ToggleConfig[] = [
-  { key: "budget_friendly",  label: "Budget",        description: "Cheapest fare",       icon: <PoundSterling size={18} /> },
-  { key: "lazy_walk",        label: "Less Walking",  description: "Minimal on foot",      icon: <Footprints size={18} /> },
-  { key: "easy_transfer",    label: "Easy Transfer", description: "Fewer connections",    icon: <ArrowLeftRight size={18} /> },
-  { key: "accessibility",    label: "Accessible",    description: "Step-free routes",     icon: <Accessibility size={18} /> },
-  { key: "pet_friendly",     label: "Pet Friendly",  description: "Avoid deep Tube",      icon: <PawPrint size={18} /> },
+const SHARED_TOGGLES: ToggleConfig[] = [
+  { key: "budget_friendly",label: "Budget",        description: "Cheapest fare",        icon: <PoundSterling size={18} /> },
+  { key: "accessibility",  label: "Accessible",    description: "Step-free routes",     icon: <Accessibility size={18} /> },
+];
+
+const COMMUTE_TOGGLES: ToggleConfig[] = [
+  { key: "speed_first",    label: "Speed First",   description: "Fastest route",        icon: <Zap size={18} /> },
+  { key: "cycle2work",     label: "Cycle2Work",    description: "More active steps",    icon: <Bike size={18} /> },
+  { key: "lazy_walk",      label: "Less Walking",  description: "Minimal on foot",      icon: <Footprints size={18} /> },
+  { key: "easy_transfer",  label: "Easy Transfer", description: "Fewer connections",    icon: <ArrowLeftRight size={18} /> },
+  ...SHARED_TOGGLES,
+];
+
+const EXPLORE_TOGGLES: ToggleConfig[] = [
+  { key: "scenic_bus",     label: "Scenic Bus",    description: "Iconic London routes", icon: <Bus size={18} /> },
+  { key: "scenic_boat",    label: "River Boat",    description: "Thames Clipper",       icon: <Ship size={18} /> },
+  { key: "pet_friendly",   label: "Pet Friendly",  description: "Avoid deep Tube",      icon: <PawPrint size={18} /> },
+  ...SHARED_TOGGLES,
 ];
 
 interface Props {
   preferences: Preferences;
   onChange: (key: keyof Preferences) => void;
+  mode: TravelMode;
 }
 
-export default function PreferenceToggles({ preferences, onChange }: Props) {
+export default function PreferenceToggles({ preferences, onChange, mode }: Props) {
+  const toggles = mode === "commute" ? COMMUTE_TOGGLES : EXPLORE_TOGGLES;
+
   return (
     <div className="grid grid-cols-2 gap-2">
-      {TOGGLES.map(({ key, label, description, icon }, i) => {
+      {toggles.map(({ key, label, description, icon }, i) => {
         const active = preferences[key];
-        const isLastOdd = i === TOGGLES.length - 1 && TOGGLES.length % 2 !== 0;
+        const isLastOdd = i === toggles.length - 1 && toggles.length % 2 !== 0;
         return (
           <button
             key={key}

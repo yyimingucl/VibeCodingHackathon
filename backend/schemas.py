@@ -8,6 +8,10 @@ class UserPreferences(BaseModel):
     easy_transfer: bool = False
     accessibility: bool = False
     pet_friendly: bool = False
+    speed_first: bool = False
+    cycle2work: bool = False
+    scenic_bus: bool = False
+    scenic_boat: bool = False
 
 
 class RouteConstraints(BaseModel):
