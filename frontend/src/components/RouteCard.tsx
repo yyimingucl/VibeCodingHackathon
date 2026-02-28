@@ -13,20 +13,34 @@ function StepIcon({ mode }: { mode: string }) {
 }
 
 function StepTimeline({ steps }: { steps: RouteOption["steps"] }) {
+  // Merge consecutive WALK steps (frontend safety net)
+  const merged = steps.reduce<RouteOption["steps"]>((acc, step) => {
+    const prev = acc[acc.length - 1];
+    if (step.mode === "WALK" && prev?.mode === "WALK") {
+      acc[acc.length - 1] = {
+        ...prev,
+        duration_min: Math.round((prev.duration_min + step.duration_min) * 10) / 10,
+        to_stop: step.to_stop,
+      };
+      return acc;
+    }
+    return [...acc, step];
+  }, []);
+
   return (
     <div className="flex items-center gap-1 flex-wrap mt-3">
-      {steps.map((step, i) => (
+      {merged.map((step, i) => (
         <div key={i} className="flex items-center gap-1">
           <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1">
             <StepIcon mode={step.mode} />
             {step.line && (
               <span className="text-xs font-medium text-slate-600">{step.line}</span>
             )}
-            {step.mode === "WALK" && (
+            {step.mode === "WALK" && step.duration_min > 0 && (
               <span className="text-xs text-slate-400">{step.duration_min}m</span>
             )}
           </div>
-          {i < steps.length - 1 && (
+          {i < merged.length - 1 && (
             <ArrowRight size={12} className="text-slate-300 shrink-0" />
           )}
         </div>

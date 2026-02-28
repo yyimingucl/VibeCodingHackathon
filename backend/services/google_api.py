@@ -21,12 +21,15 @@ def _make_id(*parts: str) -> str:
 
 
 def _route_signature(raw_steps: list[dict]) -> str:
-    """Fingerprint a route by its sequence of transit lines (ignores timing, keeps path)."""
-    parts = []
+    """Fingerprint a route by its sequence of transit lines (ignores timing, keeps path).
+    Consecutive WALK sub-steps are collapsed into one WALK token so that
+    turn-by-turn navigation splits don't create false duplicates."""
+    parts: list[str] = []
     for step in raw_steps:
         mode = step.get("travelMode", "WALK")
         if mode == "WALK":
-            parts.append("WALK")
+            if not parts or parts[-1] != "WALK":
+                parts.append("WALK")
         else:
             line_name = (
                 step.get("transitDetails", {})
@@ -170,18 +173,35 @@ def _parse_routes(data: dict) -> list[RouteOption]:
 
             for step in raw_steps:
                 mode = step.get("travelMode", "WALK")
-                step_dur = _parse_duration_seconds(step.get("duration", "0s"))
+                # Routes API v2 uses staticDuration at step level; duration is route-level
+                step_dur = _parse_duration_seconds(
+                    step.get("staticDuration") or step.get("duration", "0s")
+                )
 
                 transit_details = step.get("transitDetails", {})
                 stop_details = transit_details.get("stopDetails", {})
                 from_stop = stop_details.get("departureStop", {}).get("name", "")
                 to_stop = stop_details.get("arrivalStop", {}).get("name", "")
-                line_name = transit_details.get("transitLine", {}).get("name", "")
+                transit_line = transit_details.get("transitLine", {})
+                line_name = transit_line.get("nameShort") or transit_line.get("name", "")
 
                 if mode == "WALK":
-                    walk_min += step_dur
                     from_stop = from_stop or "Walk start"
                     to_stop = to_stop or "Walk end"
+                    # Merge consecutive WALK sub-steps into one (Google splits walking
+                    # into many turn-by-turn navigation steps)
+                    if steps and steps[-1].mode == "WALK":
+                        prev = steps[-1]
+                        steps[-1] = RouteStep(
+                            mode="WALK",
+                            line="",
+                            from_stop=prev.from_stop,
+                            to_stop=to_stop,
+                            duration_min=round(prev.duration_min + step_dur, 1),
+                        )
+                        walk_min += step_dur
+                        continue
+                    walk_min += step_dur
                 else:
                     transit_count += 1
 
