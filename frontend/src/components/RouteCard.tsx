@@ -1,15 +1,19 @@
 import { RouteOption } from "@/types";
-import { Footprints, Train, ArrowRight } from "lucide-react";
+import { Footprints, Train, Bus, ArrowRight } from "lucide-react";
 
 interface Props {
   route: RouteOption;
   isTopChoice: boolean;
   rank: number;
+  onGetPass?: () => void;
 }
 
 function StepIcon({ mode }: { mode: string }) {
   if (mode === "WALK") return <Footprints size={14} className="text-slate-400" />;
-  return <Train size={14} className="text-cyan-500" />;
+  if (mode === "BUS") return <Bus size={14} className="text-red-500" />;
+  if (mode === "RAIL") return <Train size={14} className="text-indigo-500" />;
+  if (mode === "TRAM") return <Train size={14} className="text-purple-500" />;
+  return <Train size={14} className="text-cyan-500" />; // TUBE + TRANSIT fallback
 }
 
 function StepTimeline({ steps }: { steps: RouteOption["steps"] }) {
@@ -37,7 +41,7 @@ function StepTimeline({ steps }: { steps: RouteOption["steps"] }) {
               <span className="text-xs font-medium text-slate-600">{step.line}</span>
             )}
             {step.mode === "WALK" && step.duration_min > 0 && (
-              <span className="text-xs text-slate-400">{step.duration_min}m</span>
+              <span className="text-xs text-slate-400">{step.duration_min}min</span>
             )}
           </div>
           {i < merged.length - 1 && (
@@ -49,7 +53,7 @@ function StepTimeline({ steps }: { steps: RouteOption["steps"] }) {
   );
 }
 
-export default function RouteCard({ route, isTopChoice, rank }: Props) {
+export default function RouteCard({ route, isTopChoice, rank, onGetPass }: Props) {
   const fare = route.fare_gbp !== null
     ? `£${route.fare_gbp.toFixed(2)}`
     : "Price Unavailable";
@@ -101,6 +105,16 @@ export default function RouteCard({ route, isTopChoice, rank }: Props) {
         <div className="relative">
           <StepTimeline steps={route.steps} />
         </div>
+
+        {/* Offline pass button */}
+        {onGetPass && (
+          <button
+            onClick={onGetPass}
+            className="relative mt-3 text-xs text-amber-500 hover:text-amber-600 font-medium transition-colors"
+          >
+            🎟️ Get Offline Pass
+          </button>
+        )}
       </div>
     );
   }
@@ -135,6 +149,15 @@ export default function RouteCard({ route, isTopChoice, rank }: Props) {
       </div>
 
       <StepTimeline steps={route.steps} />
+
+      {onGetPass && (
+        <button
+          onClick={onGetPass}
+          className="mt-3 text-xs text-slate-400 hover:text-cyan-500 font-medium transition-colors"
+        >
+          🎟️ Get Offline Pass
+        </button>
+      )}
     </div>
   );
 }

@@ -47,6 +47,20 @@ _RAIL_TYPES = {
 _BUS_TYPES = {"BUS", "INTERCITY_BUS", "TROLLEYBUS"}
 
 
+def _vehicle_type_to_mode(vehicle_type: str) -> str:
+    """Map Google's vehicle.type string to a display mode for RouteStep."""
+    vt = vehicle_type.upper()
+    if vt in {"SUBWAY", "METRO_RAIL"}:
+        return "TUBE"
+    if vt in {"HEAVY_RAIL", "RAIL", "COMMUTER_TRAIN", "HIGH_SPEED_TRAIN", "LONG_DISTANCE_TRAIN"}:
+        return "RAIL"
+    if vt in _BUS_TYPES:
+        return "BUS"
+    if vt == "TRAM":
+        return "TRAM"
+    return "TRANSIT"
+
+
 def _impute_fare(raw_steps: list[dict], duration_min: float) -> float:
     """
     TfL-realistic fare heuristic when Google returns no fare data.
@@ -95,8 +109,8 @@ def _build_mock_routes() -> list[RouteOption]:
             transfers=1,
             steps=[
                 RouteStep(mode="WALK", line="", from_stop="Origin", to_stop="King's Cross St. Pancras", duration_min=3.0),
-                RouteStep(mode="TRANSIT", line="Piccadilly", from_stop="King's Cross St. Pancras", to_stop="Paddington", duration_min=18.0),
-                RouteStep(mode="TRANSIT", line="Elizabeth", from_stop="Paddington", to_stop="Destination Station", duration_min=8.0),
+                RouteStep(mode="TUBE", line="Piccadilly", from_stop="King's Cross St. Pancras", to_stop="Paddington", duration_min=18.0),
+                RouteStep(mode="TUBE", line="Elizabeth", from_stop="Paddington", to_stop="Destination Station", duration_min=8.0),
                 RouteStep(mode="WALK", line="", from_stop="Destination Station", to_stop="Destination", duration_min=3.0),
             ],
             features=RouteFeatures(duration_min=32.0, fare_gbp=4.50, walk_min=6.0, transfers=1),
@@ -112,7 +126,7 @@ def _build_mock_routes() -> list[RouteOption]:
             transfers=0,
             steps=[
                 RouteStep(mode="WALK", line="", from_stop="Origin", to_stop="Bus Stop A", duration_min=5.0),
-                RouteStep(mode="TRANSIT", line="N29", from_stop="Bus Stop A", to_stop="Bus Stop B", duration_min=50.0),
+                RouteStep(mode="BUS", line="N29", from_stop="Bus Stop A", to_stop="Bus Stop B", duration_min=50.0),
                 RouteStep(mode="WALK", line="", from_stop="Bus Stop B", to_stop="Destination", duration_min=7.0),
             ],
             features=RouteFeatures(duration_min=62.0, fare_gbp=1.75, walk_min=12.0, transfers=0),
@@ -128,7 +142,7 @@ def _build_mock_routes() -> list[RouteOption]:
             transfers=0,
             steps=[
                 RouteStep(mode="WALK", line="", from_stop="Origin", to_stop="Holborn", duration_min=8.0),
-                RouteStep(mode="TRANSIT", line="Central", from_stop="Holborn", to_stop="Destination Station", duration_min=29.0),
+                RouteStep(mode="TUBE", line="Central", from_stop="Holborn", to_stop="Destination Station", duration_min=29.0),
                 RouteStep(mode="WALK", line="", from_stop="Destination Station", to_stop="Destination", duration_min=8.0),
             ],
             features=RouteFeatures(duration_min=45.0, fare_gbp=2.80, walk_min=16.0, transfers=0),
@@ -185,6 +199,11 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                 transit_line = transit_details.get("transitLine", {})
                 line_name = transit_line.get("nameShort") or transit_line.get("name", "")
 
+                # Resolve specific transit mode from vehicle type
+                if mode != "WALK":
+                    vehicle_type = transit_line.get("vehicle", {}).get("type", "")
+                    mode = _vehicle_type_to_mode(vehicle_type)
+
                 if mode == "WALK":
                     from_stop = from_stop or "Walk start"
                     to_stop = to_stop or "Walk end"
@@ -221,9 +240,14 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                 if s.mode == "WALK":
                     if not mode_parts or mode_parts[-1] != "Walk":
                         mode_parts.append("Walk")
-                else:
-                    label = f"Tube ({s.line})" if s.line else "Transit"
-                    mode_parts.append(label)
+                elif s.mode == "BUS":
+                    mode_parts.append(f"Bus ({s.line})" if s.line else "Bus")
+                elif s.mode == "RAIL":
+                    mode_parts.append(f"Rail ({s.line})" if s.line else "Rail")
+                elif s.mode == "TRAM":
+                    mode_parts.append(f"Tram ({s.line})" if s.line else "Tram")
+                else:  # TUBE or TRANSIT fallback
+                    mode_parts.append(f"Tube ({s.line})" if s.line else "Tube")
             summary = " + ".join(mode_parts) if mode_parts else "Transit"
 
             # Smart fare: use Google's value if valid, else TfL heuristic

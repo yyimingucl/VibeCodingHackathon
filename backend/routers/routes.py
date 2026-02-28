@@ -4,11 +4,13 @@ import random
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException, Header, Query
+from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File
 from typing import Annotated
 
-from schemas import RouteRankRequest, RouteOption
+from schemas import RouteRankRequest, RouteOption, VoiceIntentRequest
 from services.google_api import fetch_google_routes
+from services.llm_intent import extract_intent
+from services.asr import transcribe_audio
 from core.ranking import rank_routes
 
 router = APIRouter(tags=["routes"])
@@ -62,6 +64,19 @@ async def get_raw_routes(request: RouteRankRequest) -> list[RouteOption]:
         return routes
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/routes/voice-intent")
+async def voice_intent(request: VoiceIntentRequest) -> dict:
+    return await extract_intent(request.text)
+
+
+@router.post("/api/routes/voice-search")
+async def voice_search(audio: UploadFile = File(...)) -> dict:
+    audio_bytes = await audio.read()
+    transcript = await transcribe_audio(audio_bytes)
+    print(f"[voice-search] transcript: {transcript!r}")
+    return await extract_intent(transcript or "")
 
 
 @router.post("/api/routes/rank", response_model=list[RouteOption])

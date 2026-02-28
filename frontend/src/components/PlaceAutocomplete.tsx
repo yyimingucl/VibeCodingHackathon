@@ -28,7 +28,7 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, icon }
       setIsFetching(true);
       try {
         const res = await fetch(
-          `http://localhost:8000/api/places/autocomplete?q=${encodeURIComponent(value)}`
+          `http://localhost:8001/api/places/autocomplete?q=${encodeURIComponent(value)}`
         );
         if (!res.ok) throw new Error();
         const data: string[] = await res.json();

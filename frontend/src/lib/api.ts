@@ -1,6 +1,12 @@
-import { RouteRequest, RouteOption } from "@/types";
+import { RouteRequest, RouteOption, Preferences } from "@/types";
 
-const BACKEND_URL = "http://localhost:8000";
+export interface VoiceIntentResult {
+  origin: string;
+  destination: string;
+  preferences: Preferences;
+}
+
+const BACKEND_URL = "http://localhost:8001";
 
 const MOCK_ROUTES: RouteOption[] = [
   {
@@ -69,5 +75,36 @@ export async function fetchRankedRoutes(payload: RouteRequest): Promise<RouteOpt
   } catch (err) {
     console.error("Backend unavailable, using mock data:", err);
     return MOCK_ROUTES;
+  }
+}
+
+export async function fetchVoiceIntent(text: string): Promise<VoiceIntentResult | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/routes/voice-intent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error("[voice-intent] fetch failed:", err);
+    return null;
+  }
+}
+
+export async function fetchVoiceSearch(audioBlob: Blob): Promise<VoiceIntentResult | null> {
+  try {
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "audio.webm");
+    const res = await fetch(`${BACKEND_URL}/api/routes/voice-search`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error("[voice-search] fetch failed:", err);
+    return null;
   }
 }
