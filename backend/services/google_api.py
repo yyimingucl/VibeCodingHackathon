@@ -20,6 +20,67 @@ def _make_id(*parts: str) -> str:
     return hashlib.md5("-".join(parts).encode()).hexdigest()[:12]
 
 
+def _route_signature(raw_steps: list[dict]) -> str:
+    """Fingerprint a route by its sequence of transit lines (ignores timing, keeps path)."""
+    parts = []
+    for step in raw_steps:
+        mode = step.get("travelMode", "WALK")
+        if mode == "WALK":
+            parts.append("WALK")
+        else:
+            line_name = (
+                step.get("transitDetails", {})
+                    .get("transitLine", {})
+                    .get("name", "TRANSIT")
+            )
+            parts.append(f"TRANSIT:{line_name}")
+    return " -> ".join(parts)
+
+
+_RAIL_TYPES = {
+    "SUBWAY", "HEAVY_RAIL", "RAIL", "METRO_RAIL",
+    "COMMUTER_TRAIN", "HIGH_SPEED_TRAIN", "LONG_DISTANCE_TRAIN", "TRAM",
+}
+_BUS_TYPES = {"BUS", "INTERCITY_BUS", "TROLLEYBUS"}
+
+
+def _impute_fare(raw_steps: list[dict], duration_min: float) -> float:
+    """
+    TfL-realistic fare heuristic when Google returns no fare data.
+    - Walk only  → £0.00
+    - Bus only   → £1.75 (Hopper flat fare)
+    - Tube/Rail  → £2.80 base + £0.05/min over 30 min
+    """
+    transit_steps = [s for s in raw_steps if s.get("travelMode") != "WALK"]
+
+    if not transit_steps:
+        return 0.0
+
+    vehicle_types = {
+        s.get("transitDetails", {})
+         .get("transitLine", {})
+         .get("vehicle", {})
+         .get("type", "")
+         .upper()
+        for s in transit_steps
+    }
+
+    has_rail = bool(vehicle_types & _RAIL_TYPES)
+    has_bus = bool(vehicle_types & _BUS_TYPES)
+
+    if has_bus and not has_rail:
+        return 1.75
+
+    if has_rail:
+        base = 2.80
+        if duration_min > 30:
+            base += round((duration_min - 30) * 0.05, 2)
+        return round(base, 2)
+
+    # Unknown vehicle type — use zone-1 tube fare as safe default
+    return 2.80
+
+
 def _build_mock_routes() -> list[RouteOption]:
     return [
         RouteOption(
@@ -76,7 +137,9 @@ def _build_mock_routes() -> list[RouteOption]:
 
 def _parse_routes(data: dict) -> list[RouteOption]:
     routes_raw = data.get("routes", [])
-    results: list[RouteOption] = []
+
+    # unique_routes: signature -> RouteOption (keeps shortest duration per path)
+    unique_routes: dict[str, RouteOption] = {}
 
     for i, route in enumerate(routes_raw):
         try:
@@ -84,14 +147,22 @@ def _parse_routes(data: dict) -> list[RouteOption]:
             duration_str = route.get("duration", "0s")
             duration_min = _parse_duration_seconds(duration_str)
 
-            # Fare
+            # Fare — keep Google's value if > 0, otherwise use TfL heuristic
             advisory = route.get("travelAdvisory", {})
             fare_raw = advisory.get("transitFare", {}).get("value")
-            fare_gbp: Optional[float] = float(fare_raw) if fare_raw is not None else None
+            google_fare: Optional[float] = float(fare_raw) if fare_raw is not None else None
 
             # Steps
             legs = route.get("legs", [{}])
             raw_steps = legs[0].get("steps", []) if legs else []
+
+            # Deduplication fingerprint (computed from raw Google steps)
+            signature = _route_signature(raw_steps)
+
+            # Skip if we already have this path with a shorter duration
+            existing = unique_routes.get(signature)
+            if existing and existing.duration_min <= round(duration_min, 1):
+                continue
 
             steps: list[RouteStep] = []
             walk_min = 0.0
@@ -105,10 +176,7 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                 stop_details = transit_details.get("stopDetails", {})
                 from_stop = stop_details.get("departureStop", {}).get("name", "")
                 to_stop = stop_details.get("arrivalStop", {}).get("name", "")
-                line_name = (
-                    transit_details.get("transitLine", {})
-                    .get("name", "")
-                )
+                line_name = transit_details.get("transitLine", {}).get("name", "")
 
                 if mode == "WALK":
                     walk_min += step_dur
@@ -138,30 +206,35 @@ def _parse_routes(data: dict) -> list[RouteOption]:
                     mode_parts.append(label)
             summary = " + ".join(mode_parts) if mode_parts else "Transit"
 
-            route_id = _make_id(str(i), summary, str(duration_min))
-            fare_for_features = fare_gbp if fare_gbp is not None else round(duration_min * 0.15 * 1.2, 2)
+            # Smart fare: use Google's value if valid, else TfL heuristic
+            if google_fare and google_fare > 0:
+                fare_gbp = google_fare
+            else:
+                fare_gbp = _impute_fare(raw_steps, duration_min)
 
-            results.append(RouteOption(
+            route_id = _make_id(signature)
+
+            unique_routes[signature] = RouteOption(
                 id=route_id,
                 summary=summary,
                 duration_min=round(duration_min, 1),
-                fare_gbp=fare_gbp,
+                fare_gbp=round(fare_gbp, 2),
                 walk_min=round(walk_min, 1),
                 transfers=transfers,
                 steps=steps,
                 features=RouteFeatures(
                     duration_min=round(duration_min, 1),
-                    fare_gbp=fare_for_features,
+                    fare_gbp=round(fare_gbp, 2),
                     walk_min=round(walk_min, 1),
                     transfers=transfers,
                 ),
                 score=0.0,
                 why=None,
-            ))
+            )
         except Exception:
             continue
 
-    return results
+    return list(unique_routes.values())
 
 
 async def fetch_google_routes(origin: str, destination: str, depart_time: str) -> list[RouteOption]:

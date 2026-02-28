@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
+import { Dancing_Script } from "next/font/google";
 import "./globals.css";
 
+const dancingScript = Dancing_Script({
+  subsets: ["latin"],
+  weight: ["700"],
+  variable: "--font-dancing",
+});
+
 export const metadata: Metadata = {
-  title: "Route Ranker",
-  description: "Find the best transit route in London, ranked for you.",
+  title: "Travelet",
+  description: "Commute on your vibe.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 min-h-screen">
+    <html lang="en" className={dancingScript.variable}>
+      <body className="bg-slate-50 min-h-screen">
         {children}
       </body>
     </html>

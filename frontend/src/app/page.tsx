@@ -6,6 +6,7 @@ import { Preferences, RouteOption } from "@/types";
 import { fetchRankedRoutes } from "@/lib/api";
 import PreferenceToggles from "@/components/PreferenceToggles";
 import RouteCard from "@/components/RouteCard";
+import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 
 const DEFAULT_PREFERENCES: Preferences = {
   budget_friendly: false,
@@ -57,43 +58,42 @@ export default function Home() {
     <main className="max-w-md mx-auto pt-10 pb-16 px-4">
       {/* Header */}
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Route Ranker</h1>
-        <p className="text-sm text-gray-400 mt-1">London transit, ranked for you</p>
+        <h1
+          className="text-5xl text-gray-900"
+          style={{ fontFamily: "var(--font-dancing)" }}
+        >
+          Travelet
+        </h1>
+        <p className="text-sm text-gray-400 mt-1">Commute on your vibe</p>
       </div>
 
       {/* Input Card */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 mb-4 space-y-3">
         {/* Origin */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-            <MapPin size={16} className="text-blue-500" />
-          </div>
-          <input
-            type="text"
-            placeholder="From — e.g. King's Cross, London"
-            value={origin}
-            onChange={(e) => setOrigin(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 text-sm text-gray-800 placeholder-gray-300 bg-transparent outline-none"
-          />
-        </div>
+        <PlaceAutocomplete
+          value={origin}
+          onChange={setOrigin}
+          placeholder="From — e.g. King's Cross, London"
+          icon={
+            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+              <MapPin size={16} className="text-blue-500" />
+            </div>
+          }
+        />
 
         <div className="h-px bg-gray-100 ml-11" />
 
         {/* Destination */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
-            <Navigation size={16} className="text-green-500" />
-          </div>
-          <input
-            type="text"
-            placeholder="To — e.g. Heathrow Airport, London"
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 text-sm text-gray-800 placeholder-gray-300 bg-transparent outline-none"
-          />
-        </div>
+        <PlaceAutocomplete
+          value={destination}
+          onChange={setDestination}
+          placeholder="To — e.g. Heathrow Airport, London"
+          icon={
+            <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
+              <Navigation size={16} className="text-green-500" />
+            </div>
+          }
+        />
       </div>
 
       {/* Preferences */}
@@ -108,7 +108,7 @@ export default function Home() {
       <button
         onClick={handleSearch}
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white rounded-2xl py-4 text-base font-semibold tracking-tight shadow-lg shadow-gray-200 transition-all duration-200 active:scale-[0.98] disabled:opacity-60 mb-6"
+        className="w-full flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-2xl py-4 text-base font-semibold tracking-tight shadow-lg shadow-cyan-200 transition-all duration-200 active:scale-[0.98] disabled:opacity-60 mb-6"
       >
         {isLoading ? (
           <>

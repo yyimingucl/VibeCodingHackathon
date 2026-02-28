@@ -1,0 +1,46 @@
+{
+  "_comment": "TfL London fare reference data (Oyster/contactless peak fares, GBP). Updated: 2025-01.",
+  "bus": {
+    "default": 1.75
+  },
+  "tube": {
+    "zone_1": 2.80,
+    "zone_1_2": 3.40,
+    "zone_1_3": 3.80,
+    "zone_1_4": 4.60,
+    "zone_1_5": 5.20,
+    "zone_1_6": 5.60,
+    "zone_2_3": 2.10,
+    "zone_2_4": 2.60,
+    "zone_2_5": 3.20,
+    "zone_2_6": 3.80
+  },
+  "elizabeth_line": {
+    "zone_1": 2.80,
+    "zone_1_2": 3.40,
+    "zone_1_3": 3.80,
+    "zone_1_6_heathrow": 5.60,
+    "zone_2_3": 2.10,
+    "zone_2_heathrow": 4.50
+  },
+  "dlr": {
+    "zone_1": 2.80,
+    "zone_1_2": 3.40,
+    "zone_2_3": 2.10
+  },
+  "overground": {
+    "zone_1": 2.80,
+    "zone_1_2": 3.40,
+    "zone_2_3": 2.10,
+    "zone_2_4": 2.60
+  },
+  "heathrow_express": {
+    "heathrow_paddington": 22.00,
+    "heathrow_paddington_first": 32.00
+  },
+  "national_rail": {
+    "short": 5.50,
+    "medium": 12.00,
+    "long": 28.00
+  }
+}
