@@ -127,7 +127,7 @@ export default function Home() {
           >
             Travelet
           </h1>
-          <p className="text-sm text-white/70 mt-1 tracking-wide">Commute on your vibe</p>
+          <p className="text-sm text-white/70 mt-1 tracking-wide">Go on your vibe</p>
         </div>
 
         {/* Input Card */}
