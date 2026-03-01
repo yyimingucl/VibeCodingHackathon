@@ -1,1 +1,0 @@
-1. better way to fetch the prices.
